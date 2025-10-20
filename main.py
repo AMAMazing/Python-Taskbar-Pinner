@@ -11,12 +11,15 @@ class App(TkinterDnD.Tk):
     def __init__(self):
         super().__init__()
         self.title("Python Taskbar Pinner")
-        self.geometry("550x530") # Slightly taller for the new button
+        # MODIFIED: Increased height for the new name field
+        self.geometry("550x600")
         self.resizable(False, False)
 
         # Member Variables
         self.script_path = tk.StringVar()
         self.image_path = tk.StringVar()
+        # NEW: StringVar to hold the custom shortcut name
+        self.shortcut_name_var = tk.StringVar()
         self.hide_console = tk.BooleanVar(value=True)
         self.image_preview = None
 
@@ -30,9 +33,16 @@ class App(TkinterDnD.Tk):
         script_frame = self.create_file_drop_frame(main_frame, "1. Drag & Drop Python Script (.py) or Click to Select", self.select_script, self.script_path, has_clear=False)
         script_frame.pack(fill=tk.X, pady=5)
         
-        # --- Image Selection (MODIFIED to be optional) ---
+        # --- Image Selection ---
         image_frame = self.create_file_drop_frame(main_frame, "2. Drag & Drop Icon Image (Optional)", self.select_image, self.image_path, has_clear=True)
         image_frame.pack(fill=tk.X, pady=5)
+        
+        # NEW: Shortcut Name Section ---
+        name_frame = ttk.LabelFrame(main_frame, text="3. Shortcut Name (Optional)", padding="10")
+        name_frame.pack(fill=tk.X, pady=5)
+        
+        ttk.Label(name_frame, text="Leave blank to use the script's name.").pack(anchor="w", pady=(0, 5))
+        ttk.Entry(name_frame, textvariable=self.shortcut_name_var).pack(fill=tk.X, expand=True)
         
         # --- Image Preview ---
         self.preview_canvas = tk.Canvas(main_frame, width=128, height=128, bg="white", relief="groove")
@@ -57,7 +67,6 @@ class App(TkinterDnD.Tk):
         self.status_bar.pack(side=tk.BOTTOM, fill=tk.X)
         self.update_status("Ready. Select your Python script.")
 
-    # MODIFIED: Added a 'has_clear' parameter to conditionally add the Clear button
     def create_file_drop_frame(self, parent, label_text, command, string_var, has_clear=False):
         frame = ttk.LabelFrame(parent, text=label_text, padding="10")
         entry = ttk.Entry(frame, textvariable=string_var, state="readonly")
@@ -94,7 +103,6 @@ class App(TkinterDnD.Tk):
         path = filedialog.askopenfilename(title="Select Icon Image", filetypes=[("Image Files", "*.png *.jpg *.jpeg *.ico")])
         if path: self.image_path.set(path); self.update_image_preview(); self.update_status("Icon image selected.")
     
-    # NEW: Function to clear the image selection
     def clear_image(self):
         self.image_path.set("")
         self.update_image_preview()
@@ -114,12 +122,12 @@ class App(TkinterDnD.Tk):
         except Exception:
             self.preview_canvas.create_text(64, 64, text="Invalid Image", fill="red")
 
-    # MODIFIED: Core logic to handle optional image
+    # MODIFIED: Core logic updated to handle custom shortcut name
     def create_shortcut(self):
         script = self.script_path.get()
         image = self.image_path.get()
 
-        # 1. Validation: Only the script is required now
+        # 1. Validation
         if not script:
             messagebox.showerror("Error", "Please select a Python script.")
             return
@@ -129,28 +137,35 @@ class App(TkinterDnD.Tk):
 
         try:
             script_dir = os.path.dirname(script)
-            script_filename = os.path.basename(script)
-            shortcut_name = os.path.splitext(script_filename)[0]
             
-            # 2. Determine Python Executable
+            # 2. Determine Shortcut Name
+            # NEW: Check if the user provided a custom name, otherwise derive from script
+            custom_name = self.shortcut_name_var.get().strip()
+            if custom_name:
+                shortcut_name = custom_name
+            else:
+                script_filename = os.path.basename(script)
+                shortcut_name = os.path.splitext(script_filename)[0]
+            
+            # 3. Determine Python Executable
             python_exe_name = 'pythonw.exe' if self.hide_console.get() else 'python.exe'
             python_exe_path = os.path.join(os.path.dirname(sys.executable), python_exe_name)
             if not os.path.exists(python_exe_path): python_exe_path = sys.executable
 
             icon_location = python_exe_path # Default to python executable for icon
 
-            # 3. Process image ONLY if one was provided
+            # 4. Process image ONLY if one was provided
             if image:
                 if not os.path.exists(image):
                     messagebox.showerror("Error", "The selected image file does not exist.")
                     return
-                # Convert Image to .ico
+                # Convert Image to .ico using the final shortcut name
                 icon_path = os.path.join(script_dir, f"{shortcut_name}_icon.ico")
                 img = Image.open(image)
                 img.save(icon_path, format='ICO', sizes=[(32,32), (48,48), (64,64), (256,256)])
-                icon_location = icon_path # Set the custom icon path
+                icon_location = icon_path
 
-            # 4. Create the Shortcut
+            # 5. Create the Shortcut
             desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
             shortcut_path = os.path.join(desktop_path, f"{shortcut_name}.lnk")
 
@@ -159,7 +174,7 @@ class App(TkinterDnD.Tk):
             shortcut.TargetPath = python_exe_path
             shortcut.Arguments = f'"{script}"'
             shortcut.WorkingDirectory = script_dir
-            shortcut.IconLocation = icon_location # This will be the custom .ico or the python .exe
+            shortcut.IconLocation = icon_location
             shortcut.save()
             
             self.update_status("Shortcut created! Showing you the file now...")
