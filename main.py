@@ -87,7 +87,7 @@ class App(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Python Taskbar Pinner")
-        self.setFixedSize(600, 720) # Increased height for more space
+        self.setFixedSize(600, 720)
         
         self.settings = QSettings("TaskbarPinner", "App")
         self.dark_mode = self.settings.value("dark_mode", True, type=bool)
@@ -105,11 +105,10 @@ class App(QMainWindow):
         main_layout.setSpacing(0)
         main_layout.setContentsMargins(0, 0, 0, 0)
         
-        # --- HEADER (Smaller) ---
+        # --- HEADER ---
         header = QWidget()
         header.setObjectName("header")
         header_layout = QHBoxLayout(header)
-        # Reduced vertical margins
         header_layout.setContentsMargins(30, 15, 30, 15)
         
         title = QLabel("Python Taskbar Pinner")
@@ -159,9 +158,7 @@ class App(QMainWindow):
         
         content_layout.addSpacing(20)
         
-        # --- REFACTORED LAYOUT (PREVIEW AND CHECKBOX) ---
-        
-        # Icon Preview (centered)
+        # Icon Preview
         preview_label = QLabel("Icon Preview")
         preview_label.setObjectName("previewLabel")
         preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -171,17 +168,15 @@ class App(QMainWindow):
         self.preview_frame.setObjectName("preview")
         self.preview_frame.setFixedSize(140, 140)
         self.preview_frame.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.preview_frame.setText("Default")
         content_layout.addWidget(self.preview_frame, 0, Qt.AlignmentFlag.AlignCenter)
         
         content_layout.addSpacing(20)
 
-        # Hide Console Checkbox (centered)
+        # Hide Console Checkbox
         self.hide_console_cb = QCheckBox("Hide console window (recommended for GUI apps)")
         self.hide_console_cb.setCursor(Qt.CursorShape.PointingHandCursor)
         content_layout.addWidget(self.hide_console_cb, 0, Qt.AlignmentFlag.AlignCenter)
         
-        # Final button and stretch to push everything up
         content_layout.addStretch(1)
         create_btn = QPushButton("Create Shortcut")
         create_btn.setObjectName("createButton")
@@ -200,6 +195,8 @@ class App(QMainWindow):
         self.status_bar.setContentsMargins(30, 0, 30, 0)
         main_layout.addWidget(self.status_bar)
         
+        self.update_preview()
+
     def apply_theme(self):
         if self.dark_mode:
             # --- Dark Theme Colors ---
@@ -316,7 +313,7 @@ class App(QMainWindow):
             self.image_path = ""
             self.image_selector.setText("")
             self.update_preview()
-            self.update_status("Image cleared. Will use default Python icon.")
+            self.update_status("Image cleared. Will use default icon.")
             return
 
         if filepath.lower().endswith(('.png', '.jpg', '.jpeg', '.ico', '.bmp')):
@@ -330,7 +327,7 @@ class App(QMainWindow):
     def update_preview(self):
         if not self.image_path:
             self.preview_frame.setPixmap(QPixmap())
-            self.preview_frame.setText("Default")
+            self.preview_frame.setText("Icon Preview\n(Defaults to Python icon)")
             return
             
         try:
@@ -387,9 +384,13 @@ class App(QMainWindow):
                     QMessageBox.warning(self, "Warning", "The selected image file does not exist. Using default icon.")
                 else:
                     icon_path = os.path.join(script_dir, f"{shortcut_name}_icon.ico")
-                    img = Image.open(image)
-                    img.save(icon_path, format='ICO', sizes=[(16,16), (32,32), (48,48), (64,64), (256,256)])
-                    icon_location = icon_path
+                    try:
+                        img = Image.open(image)
+                        img.save(icon_path, format='ICO', sizes=[(32,32), (48,48), (64,64), (256,256)])
+                        icon_location = icon_path
+                    except Exception as e:
+                        QMessageBox.warning(self, "Warning", f"Could not convert image: {e}. Using Python's default icon.")
+                        icon_location = python_exe_path
                 
             desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
             shortcut_path = os.path.join(desktop_path, f"{shortcut_name}.lnk")
@@ -399,13 +400,13 @@ class App(QMainWindow):
             shortcut.TargetPath = python_exe_path
             shortcut.Arguments = f'"{script}"'
             shortcut.WorkingDirectory = script_dir
-            shortcut.IconLocation = f'"{icon_location}",0'
+            shortcut.IconLocation = icon_location
             shortcut.save()
             
             self.update_status("Shortcut created successfully!")
             
             QMessageBox.information(self, "Success!",
-                "Shortcut created on your Desktop.\n\nYou can now right-click it and choose 'Pin to taskbar'.")
+                "Shortcut created on your Desktop.\nYou can now right-click it and choose 'Pin to taskbar'.")
             
             subprocess.run(f'explorer /select,"{shortcut_path}"', shell=True)
             
